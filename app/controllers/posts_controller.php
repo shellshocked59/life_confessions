@@ -157,13 +157,14 @@ class PostsController extends AppController {
 				if (!empty($value['question']))
 				{
 					//question asked
-					$post['quote_text'] = $value['question']					
+					$post['quote_text'] = $value['question'];				
 				}
 				if (!empty($value['answer']))
 				{
 					//question asked
-					$post['content'] = $value['answer']					
+					$post['content'] = $value['answer'];					
 				}
+				break;
 			//CONVERSATION
 			case 'conversation':
 				if (!empty($value['conversation-title']))
