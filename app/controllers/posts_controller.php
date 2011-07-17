@@ -52,7 +52,7 @@ class PostsController extends AppController {
 				}
 				if (!empty($value['photo-url-1280']))
 				{
-					//largest size photo available. aslo comes in 500, 400, 250, 100, 75
+					//largest size photo available. also comes in 500, 400, 250, 100, 75
 					$post['image_1280'] = ($value['photo-url-1280']);
 				}
 				if(!empty($value['photos']))
@@ -130,7 +130,7 @@ class PostsController extends AppController {
 				if (!empty($value['quote-source']))
 				{
 					//source for a quote
-					$post['quote_source'] = ($value['quote-source']);
+					$post['orgin'] = ($value['quote-source']);
 				}
 				break;
 			
@@ -145,15 +145,25 @@ class PostsController extends AppController {
 				if (!empty($value['link-url']))
 				{
 					//url for a link
-					$post['link_url'] = ($value['link-url']);
+					$post['orgin'] = ($value['link-url']);
 				}
 				if (!empty($value['link-description']))
 				{
 					//description for a link
-					$post['link_description'] = ($value['link-description']);
+					$post['title'] = ($value['link-description']);
 				}
 				break;
-			
+			case 'answer':
+				if (!empty($value['question']))
+				{
+					//question asked
+					$post['quote_text'] = $value['question']					
+				}
+				if (!empty($value['answer']))
+				{
+					//question asked
+					$post['content'] = $value['answer']					
+				}
 			//CONVERSATION
 			case 'conversation':
 				if (!empty($value['conversation-title']))
