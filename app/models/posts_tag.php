@@ -1,9 +1,9 @@
 <?php
-class PostConversation extends AppModel {
-	var $name = 'PostsConversation';
+class PostTag extends AppModel {
+	var $name = 'PostTag';
 	var $displayField = 'name';
 	//The Associations below have been created with all possible keys, those that are not needed can be removed
-
+	
 	var $belongsTo = array(
 		'Post' => array(
 			'className' => 'Post',
@@ -13,5 +13,5 @@ class PostConversation extends AppModel {
 			'order' => ''
 		)
 	);
-}
-?>
+	
+	}

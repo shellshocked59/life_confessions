@@ -2,22 +2,124 @@
 class PostsController extends AppController {
 
 	var $name = 'Posts';
-
-	function index()
+	var $paginate = array(
+        'limit' => 10,
+        'order' => array(
+            'Post.created' => 'desc'
+        )
+    );
+	var $helpers = array('Post');
+	
+	function beforeFilter() 
 	{
+		parent::beforeFilter();
+		$this->Auth->allowedActions = array('index');
+	}
+	function index($condition = 'all', $query = '')
+	{
+		//search through all posts
 		//paginate through all posts
-		//filter by type in a view helper
+		//show by type in a view helper
+		//handles the search box
+		
+		if (isset($this->data)) 
+		{
+			$query = $this->data['Search']['search'];
+			$this->passedArgs['query'] = $query;
+			$this->redirect("/posts/index/all/{$query}");
+
+		} 
+		
+		// $options['order']['Post.id'] = 'desc'; //change to date
+		// $options['limit'] = 20;
+		// $options['conditions']['viewable'] = 1;
+		
+		switch($condition)
+		{
+			case 'all':
+			break;
+			case 'tag':
+				$options['conditions']['Tag.name'] = $condition;	
+			break;
+			case 'blog':
+				$options['conditions']['Post.blog'] = $condition;	
+			break;
+		}
+		
+		
+		//finds posts similar to the posts in the like query
+		if($query == '')
+		{
+			$data = $this->paginate('Post');
+		}
+		else
+		{
+			$query_wildcards = '%' . $query . '%';
+			$data = $this->paginate('Post', array('OR' => array('Post.caption LIKE' => $query_wildcards,
+															   'Post.content LIKE' => $query_wildcards,
+															   'Post.slug LIKE' => $query_wildcards, 									   
+															   //'Tag.name LIKE' => $query_wildcards,
+															   // 'Post.blog LIKE' => $query_wildcards,
+															   'Post.audio_title LIKE' => $query_wildcards
+															  )));
+		}
+										 
+		$this->set(compact('data', 'query'));
+	}
+	function delete($id) 
+	{
+		$cur_video = $this->Post->read(null, $id);
+		$this->Post->delete($id);
+	
+		//$this->Session->setFlash('Post deleted!');
+		$this->redirect(array('action' => 'index'));
 	}
 	
-	function add()
+	function view($id)
+	{   
+			$this->Post->id = $id;       
+			$this->set('data', $this->Post->read());    
+	
+	}
+	function controls()
 	{
-		//use tumblr API to send a created post or message
+		//used for admin controls
 	}
 	
-	function getTumblr ($url) 
+	function deleteAll($blog_id)
 	{
-		$this->autoRender = false;
-		$url = 'http://'.$url.'.tumblr.com/api/read/json?num=50';
+		$posts = $this->Post->find('all', array('recursive' => -1, 'fields' => array('Post.id'), 'conditions' => array('Post.blog_id' => $blog_id)));
+		if(!empty($posts))
+		{
+			foreach($posts as $key=>$value)
+			$this->Post->delete($value['Post']['id']);
+		}
+	}
+	
+	function getBatchTumblr ($url = 'life-confessions', $total = '100') 
+	{
+		
+		set_time_limit(0);
+		$this->render = ('index');
+		
+		$json = $this->getTumblr($url, $param = 'num=1');
+		if ($total == 'all')
+		{
+			$total = $json['posts-total'];
+		}
+		$i = 0;
+		while ($i < $total)
+		{
+			$num = 20;
+			$param = 'num='.$num.'&start='.$i;
+			$json = $this->getTumblr($url, $param);
+			$this->parseTumblr($json);
+			$i = ($i + $num);
+		}
+	}
+	private function getTumblr($url, $param = 'num=50')
+	{
+		$url = 'http://'.$url.'.tumblr.com/api/read/json?'.$param;
 
 		$ci = curl_init($url);
 		curl_setopt($ci, CURLOPT_RETURNTRANSFER, TRUE);
@@ -26,14 +128,34 @@ class PostsController extends AppController {
 		// Tumblr JSON doesn't come in standard form, some str replace needed
 		$input = str_replace('var tumblr_api_read = ','',$input);
 		$input = str_replace(';','',$input);
-
 		// parameter 'true' is necessary for output as PHP array
 		$json = json_decode($input, true);
-		// debug($json); exit;
-		foreach($json['posts']	as $key => $value)
+		return $json;
+
+	}
+	
+	private function parseTumblr($json)
+	{
+		$name = $json['tumblelog']['name'];
+		$existing_blog_id = $this->Post->query("SELECT DISTINCT `id` FROM `blogs` WHERE `name` = '".$name."'");
+		
+		if(empty($existing_blog_id))
 		{
+			echo 'Register the blog you wish to pull from before pulling data from it'; exit;
+		}
+
+		foreach($json['posts']	as $key => $value)
+		{ 
+			$post = null;
+			$post_photos = null;
+			$conversations = null;
+			$tags = null;
 			$post = $this->standardGetTumblr($value);
-			$tag = $this->getTumblrTags($value);
+			$tags = $this->getTumblrTags($value);
+			
+			
+			$post['blog'] = $name;
+			
 			
 			//START SWITCH
 			switch ($value['type'])
@@ -54,56 +176,60 @@ class PostsController extends AppController {
 				{
 					//largest size photo available. also comes in 500, 400, 250, 100, 75
 					$post['image_1280'] = ($value['photo-url-1280']);
+					/*
+					$content = file_get_contents($post['photo-url-1280']);
+					file_put_contents('img/post_photos/'.$post['title'].'.jpg', $content);
+					*/
 				}
 				if(!empty($value['photos']))
 				{
 					foreach ($value['photos'] as $key2 => $value2)
 					{
-						$posts_photo[$key2]['post_id'] = $post['special_id'];
+						//$post_photos[$key2]['post_id'] = $post['tumblr_id'];
 						
 						if (!empty($value2['width']))
 						{
-							$posts_photo[$key2]['width'] = $value2['width'];
+							$post_photos[$key2]['width'] = $value2['width'];
 						}
 						if (!empty($value2['height']))
 						{
-							$posts_photo[$key2]['height'] = $value2['height'];
+							$post_photos[$key2]['height'] = $value2['height'];
 						}
 						if (!empty($value2['photo-url-1280']))
 						{
-							$posts_photo[$key2]['image_1280'] = $value2['photo-url-1280'];
+							$post_photos[$key2]['image_1280'] = $value2['photo-url-1280'];
 						}
 						if (!empty($value2['photo-url-500']))
 						{
-							$posts_photo[$key2]['image_500'] = $value2['photo-url-500'];
+							$post_photos[$key2]['image_500'] = $value2['photo-url-500'];
 						}
 						if (!empty($value2['photo-url-400']))
 						{
-							$posts_photo[$key2]['image_400'] = $value2['photo-url-400'];
+							$post_photos[$key2]['image_400'] = $value2['photo-url-400'];
 						}
 						if (!empty($value2['photo-url-250']))
 						{
-							$posts_photo[$key2]['image_250'] = $value2['photo-url-250'];
+							$post_photos[$key2]['image_250'] = $value2['photo-url-250'];
 						}
 						if (!empty($value2['photo-url-100']))
 						{
-							$posts_photo[$key2]['image_100'] = $value2['photo-url-100'];
+							$post_photos[$key2]['image_100'] = $value2['photo-url-100'];
 						}
 						if (!empty($value2['photo-url-75']))
 						{
-							$posts_photo[$key2]['image_75'] = $value2['photo-url-75'];
+							$post_photos[$key2]['image_75'] = $value2['photo-url-75'];
 						}
 						if (!empty($value2['caption']))
 						{
-							$posts_photo[$key2]['caption'] = $value2['caption'];
+							$post_photos[$key2]['caption'] = $value2['caption'];
 						}
 						if (!empty($value2['offset']))
 						{
-							$posts_photo[$key2]['offset'] = $value2['offset'];
+							$post_photos[$key2]['offset'] = $value2['offset'];
 						}
 					}
 				}
-				break;
+			break;
 				
 			//REGULAR
 			case 'regular':
@@ -117,7 +243,7 @@ class PostsController extends AppController {
 					//body for a regular item
 					$post['content'] = ($value['regular-body']);
 				}
-				break;
+			break;
 			
 			//QUOTE
 			case 'quote':
@@ -132,7 +258,7 @@ class PostsController extends AppController {
 					//source for a quote
 					$post['orgin'] = ($value['quote-source']);
 				}
-				break;
+			break;
 			
 			//LINK
 			case 'link':
@@ -152,19 +278,19 @@ class PostsController extends AppController {
 					//description for a link
 					$post['title'] = ($value['link-description']);
 				}
-				break;
+			break;
 			case 'answer':
 				if (!empty($value['question']))
 				{
 					//question asked
-					$post['quote_text'] = $value['question'];				
+					$post['title'] = $value['question'];				
 				}
 				if (!empty($value['answer']))
 				{
 					//question asked
 					$post['content'] = $value['answer'];					
 				}
-				break;
+			break;
 			//CONVERSATION
 			case 'conversation':
 				if (!empty($value['conversation-title']))
@@ -180,22 +306,22 @@ class PostsController extends AppController {
 				foreach ($value['conversation'] as $key2 => $value2)
 					{
 						
-						$conversation['number'] = $key2;
-						$conversation['conversation_id'] = $post['special_id'];
+						$conversations[$key2]['number'] = $key2;
+						$conversations[$key2]['post_id'] = $post['tumblr_id'];
 						if (!empty($value2['name']))
 						{
-							$conversation['name'] = ($value2['name']);
+							$conversations[$key2]['name'] = ($value2['name']);
 						}
 						if (!empty($value2['label']))
 						{
-							$conversation['label'] = ($value2['label']);
+							$conversations[$key2]['label'] = ($value2['label']);
 						}
 						if (!empty($value2['phrase']))
 						{
-							$conversation['phrase'] = ($value2['phrase']);
+							$conversations[$key2]['phrase'] = ($value2['phrase']);
 						}
 					}
-				break;
+			break;
 				
 			//VIDEO
 			case 'video':
@@ -211,11 +337,11 @@ class PostsController extends AppController {
 				}
 				if (!empty($value['video-player']))
 				{
-			//player for a video, can be video-player-500 or video-player-250 instead for sizing
-			$post['video_player'] = ($value['video-player']);
-			}
+					//player for a video, can be video-player-500 or video-player-250 instead for sizing
+					$post['video_player'] = ($value['video-player']);
+				}
 
-				break;
+			break;
 			
 			//AUDIO
 			case 'audio':
@@ -267,31 +393,41 @@ class PostsController extends AppController {
 					$post['audio_title'] = ($value['id3-title']);
 				}
 				//END audio metadata			
-				break;
+			break;
 			
 			//END OF SWITCH
 			}
 			
+			/*
 			//START debugging
 			echo 'DATABASE POST<br />';
 			debug($post);
-			if (!empty($tag))
+			if (!empty($tags))
 			{
 				echo 'DATABASE TAG<br />';
-				debug($tag);
+				debug($tags);
 			}
-			if (!empty($posts_photo))
+			if (!empty($post_photos))
 			{
 				echo 'DATABASE PHOTO SET<br />';
-				debug($posts_photo);
+				debug($post_photos);
+			}
+			if (!empty($conversations))
+			{
+				echo 'DATABASE CONVERSATION<br />';
+				debug($conversations);
 			}
 			echo 'TUMBLR JSON<br />';
 			debug($value);
 			//END debugging
-
+			*/
+			$this->saveTumblr($post, $tags, $post_photos, $conversations);
 		}
+		return;
 		//END OF FOREACH
 	}
+	
+
 
 	private function getTumblrTags($post)
 	{
@@ -299,19 +435,16 @@ class PostsController extends AppController {
 		{
 			foreach($post['tags'] as $key => $value)
 			{
-				//$tag['post_id'] = $post['id'];
-				$tag[$key] = $value;
+				//$tags['post_id'] = $post['id'];
+				$tags[$key]['name'] = $value;
 			}
-			return $tag;
+			return $tags;
 		}
 	}
 	private function standardGetTumblr($value)
 	{
-		if (!empty($value['id']))
-		{
-			//post id
-			$post['special_id'] = ($value['id']);
-		}
+		//post id
+		$post['tumblr_id'] = $value['id'];
 		if (!empty($value['url']))
 		{
 			//link to see post
@@ -351,5 +484,48 @@ class PostsController extends AppController {
 		}
 		return $post;
 	}
-			
+	
+	
+	private function saveTumblr($post, $tags = null, $post_photos = null, $conversations = null)
+	{
+		$data['Post'] = $post;
+		
+		if (!empty($conversations))
+		{
+			$data['PostConversation'] = $conversations;
+		}
+		if (!empty($post_photos))
+		{
+			$data['PostPhoto'] = $post_photos;
+		}
+		
+		if (!empty($tags))
+		{
+			$data['PostTag'] = $tags;
+		}
+		
+		// $selectID = "SELECT `id` FROM `tags` WHERE `name` = '".$tag['name']."'";
+		// $insert = "INSERT INTO `tags` (`name`) VALUES ('".$tag['name']."')";
+		
+		// echo($selectID);
+		
+		// mysql_query('TRUNCATE TABLE `posts`');
+		// mysql_query('TRUNCATE TABLE `posts_tags`');
+		// exit;
+		$existing_post_id = $this->Post->find('first', array('recursive' => -1, 'fields' => array('Post.id'), 'conditions' => array('Post.tumblr_id' => $data['Post']['tumblr_id'])));
+		if(!empty($existing_post_id['Post']['id']))
+		{
+			$this->Post->delete($existing_post_id['Post']['id']);
+		}
+		$data['Post']['id'] = $existing_post_id['Post']['id'];
+		if ($this->Post->saveall($data))
+		{
+			//success of save
+		}
+		else
+		{
+			echo 'an error has occured'; exit;
+		}			
+	}
+	
 }

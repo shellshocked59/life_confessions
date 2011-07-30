@@ -1,0 +1,44 @@
+/* posts/index.ctp */
+/*main content body */
+div.posts{
+margin-left:auto;
+margin-right:auto;
+width:50%;
+background-color:grey;
+}
+div.post-admin{
+text-align:right;
+background-color:black;
+}
+
+/* helpers/post.php */
+/* HEADER */
+div.post-header{
+background-color:black;
+color:white;
+}
+
+/* CONTENT */
+div.post-content{
+
+}
+div.post-content.img{
+width:100%;
+}
+
+/* if conversation */
+div.post-conversation{
+
+}
+div.post.conversation-line{
+
+}
+/* end if */
+
+/* FOOTER */
+div.post-footer{
+
+}
+span.tags{
+
+}

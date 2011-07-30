@@ -1,0 +1,5 @@
+1.5hours 7/16 04:00 - 5:30 database setup
+2 hours 7/16 22:00 - 24:00 controller cleaning
+3 hours 7/18 01:00 - 4:00 controller finalizing
+3 hours 7/20 02:30 - 05:30 index view
+3 hours 7/20 7:30 - 10:30 bugs&uploading fml

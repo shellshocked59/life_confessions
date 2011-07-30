@@ -31,4 +31,11 @@
  * @subpackage    cake.app
  */
 class AppController extends Controller {
+	var $components = array('Session', 'Auth' => array('fields' => array('username' => 'email',
+															'password' => 'password'),
+										  'loginRedirect' => 'posts/index',
+										  'logoutRedirect' => 'posts/index'));
+	var $helpers = array('Html', 'Form', 'Session', 'Paginator');
+
+
 }

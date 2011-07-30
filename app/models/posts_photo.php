@@ -1,6 +1,6 @@
 <?php
-class PostsPhoto extends AppModel {
-	var $name = 'PostsPhoto';
+class PostPhoto extends AppModel {
+	var $name = 'PostPhoto';
 	var $displayField = 'caption';
 	//The Associations below have been created with all possible keys, those that are not needed can be removed
 
@@ -14,3 +14,4 @@ class PostsPhoto extends AppModel {
 		)
 	);
 }
+?>
